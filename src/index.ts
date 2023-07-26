@@ -1,70 +1,80 @@
-import csv from "csv-parser"
-import fs from "fs"
+import csv from "csv-parser";
+import fs from "fs";
 
+const results: AvanzaDataItem[] = [];
 
-const results : AvanzaDataItem[] = [];
-
-const accountMapping = JSON.parse(fs.readFileSync(process.cwd() + '/src/account-mapping.json').toString());
+const accountMapping = JSON.parse(
+  fs.readFileSync(process.cwd() + "/src/account-mapping.json").toString()
+);
 
 interface AvanzaDataItem {
-    date: string;
-    account: string;
-    typeOfTransaction: TypeOfTransaction;
-    description: string;
-    amount: string;
-    pricePer: string;
-    cost: string;
-    fee: string;
-    currency: string;
-    ISIN: string;
-    result: string;
+  date: string;
+  account: string;
+  typeOfTransaction: TypeOfTransaction;
+  description: string;
+  amount: string;
+  pricePer: string;
+  cost: string;
+  fee: string;
+  currency: string;
+  ISIN: string;
+  result: string;
 }
 
-
-export interface GhostfolioItem{
-  accountId: string
-  comment: any
-  fee: number
-  quantity: number
-  type: string
-  unitPrice: number
-  currency: string
-  dataSource: string
-  date: string
-  symbol: string
+type GhostfolioType = "BUY" | "DIVIDEND" | "ITEM" | "LIABILITY" | "SELL";
+export interface GhostfolioItem {
+  accountId: string;
+  comment: any;
+  fee: number;
+  quantity: number;
+  type: GhostfolioType;
+  unitPrice: number;
+  currency: string;
+  dataSource: string;
+  date: string;
+  symbol: string;
 }
-
-
 
 const headers = [
-  "date", "account", "typeOfTransaction", "description", "amount", "pricePer", "cost", "fee", "currency", "ISIN", "result"
-]
+  "date",
+  "account",
+  "typeOfTransaction",
+  "description",
+  "amount",
+  "pricePer",
+  "cost",
+  "fee",
+  "currency",
+  "ISIN",
+  "result",
+];
 type TypeOfTransaction = "Köp" | "Sälj" | "Utdelning";
 
-fs.createReadStream('data.csv')
-  .pipe(csv({headers:headers, separator: ';' }))
-  .on('data', (data) => results.push(data))
-  .on('end', () => {
+fs.createReadStream("data.csv")
+  .pipe(csv({ headers: headers, separator: ";" }))
+  .on("data", (data) => results.push(data))
+  .on("end", () => {
     results.shift(); // Remove header row
     // console.log(results[0]);
-    const transformedItems= results.filter(e => e.ISIN).map(transformItem);
-  saveData(transformedItems);
-
+    const transformedItems = results.filter((e) => e.ISIN).map(transformItem);
+    saveData(transformedItems);
   });
 
-
-function saveData(data: GhostfolioItem[], outputName =  "transformed-data.json"){
+function saveData(
+  data: GhostfolioItem[],
+  outputName = "transformed-data.json"
+) {
   const obj = {
-    "meta": {
-      "date": "2023-02-05T00:00:00.000Z",
-      "version": "dev"
+    meta: {
+      date: "2023-02-05T00:00:00.000Z",
+      version: "dev",
     },
-    activities: data
-  }
+    activities: data,
+  };
   fs.writeFileSync(`${process.cwd()}/${outputName}`, JSON.stringify(obj));
 }
 
-function transformItem(item: AvanzaDataItem): GhostfolioItem{
+function transformItem(item: AvanzaDataItem): GhostfolioItem {
   return {
     date: item.date,
     comment: null,
@@ -75,26 +85,25 @@ function transformItem(item: AvanzaDataItem): GhostfolioItem{
     unitPrice: transformAvanzaNumberToNumber(item.pricePer),
     accountId: accountMapping[item.account],
     dataSource: "YAHOO",
-    type: avanaTypeToGhostfolioType(item.typeOfTransaction)
-    
-  }
-
-
-}
-
-function transformAvanzaNumberToNumber(s: string) : number{
-  if(s == "-") return 0;
-  s = s.replace(",", ".");
-  return Math.round(Number(s));
-}
-
-function avanaTypeToGhostfolioType(type: TypeOfTransaction){
-  const mapping = {
-    "Köp": "BUY",
-    "Sälj": "SELL",
-    "Utdelning": "DIVIDEND"
+    type: avanaTypeToGhostfolioType(item.typeOfTransaction),
   };
-  return mapping[type];
 }
 
+function transformAvanzaNumberToNumber(s: string): number {
+  if (s == "-") return 0;
+  s = s.replace(",", ".");
+  return Number(s);
+}
 
+function avanaTypeToGhostfolioType(type: TypeOfTransaction): GhostfolioType {
+  switch (type) {
+    case "Köp":
+      return "BUY";
+    case "Sälj":
+      return "SELL";
+    case "Utdelning":
+      return "DIVIDEND";
+    default:
+      throw new Error("Unknown type, " + type);
+  }
+}
