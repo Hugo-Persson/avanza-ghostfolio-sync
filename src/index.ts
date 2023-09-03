@@ -6,7 +6,9 @@ const results: AvanzaDataItem[] = [];
 const accountMapping = JSON.parse(
   fs.readFileSync(process.cwd() + "/src/account-mapping.json").toString()
 );
-
+const isinMapping = JSON.parse(
+  fs.readFileSync(process.cwd() + "/src/isin-symbol-mapping.json").toString()
+);
 interface AvanzaDataItem {
   date: string;
   account: string;
@@ -48,7 +50,11 @@ const headers = [
   "ISIN",
   "result",
 ];
-type TypeOfTransaction = "Köp" | "Sälj" | "Utdelning";
+let source = "YAHOO";
+// const source = "YAHOO";
+source = "MANUAL";
+
+type TypeOfTransaction = "Köp" | "Sälj" | "Utdelning" | "Övrigt";
 
 fs.createReadStream("data.csv")
   .pipe(csv({ headers: headers, separator: ";" }))
@@ -66,7 +72,7 @@ function saveData(
 ) {
   const obj = {
     meta: {
-      date: "2023-02-05T00:00:00.000Z",
+      date: new Date().toISOString(),
       version: "dev",
     },
     activities: data,
@@ -75,18 +81,42 @@ function saveData(
 }
 
 function transformItem(item: AvanzaDataItem): GhostfolioItem {
-  return {
+  if (item.typeOfTransaction === "Övrigt") {
+    return {
+      date: item.date,
+      comment: null,
+      fee: 0,
+      currency: "USD", // Currency doesn't matter cause it will match up
+      symbol: getSymbol(item),
+      quantity: Math.abs(transformAvanzaNumberToNumber(item.amount)),
+      unitPrice: transformAvanzaNumberToNumber(item.pricePer),
+      accountId: accountMapping[item.account],
+      dataSource: source,
+      type: transformAvanzaNumberToNumber(item.amount) > 0 ? "BUY" : "SELL",
+    };
+  }
+  let obj = {
     date: item.date,
     comment: null,
     fee: transformAvanzaNumberToNumber(item.fee),
     currency: item.currency,
-    symbol: item.ISIN,
-    quantity: transformAvanzaNumberToNumber(item.amount),
-    unitPrice: transformAvanzaNumberToNumber(item.pricePer),
+    symbol: getSymbol(item),
+    quantity: Math.abs(transformAvanzaNumberToNumber(item.amount)), // Even if it is sale it should be positive
+    unitPrice:
+      Math.abs(transformAvanzaNumberToNumber(item.cost)) /
+      Math.abs(transformAvanzaNumberToNumber(item.amount)), // Even if it is sale it should be positive
     accountId: accountMapping[item.account],
-    dataSource: "YAHOO",
-    type: avanaTypeToGhostfolioType(item.typeOfTransaction),
+    dataSource: source,
+    type: avanzaTypeToGhostfolioType(item.typeOfTransaction),
   };
+  if (obj.date === "2023-04-24") console.log(item, obj);
+  return obj;
+}
+
+function getSymbol(item: AvanzaDataItem) {
+  return (
+    isinMapping[item.ISIN] || item.description.replace(/ /g, "_").toUpperCase()
+  );
 }
 
 function transformAvanzaNumberToNumber(s: string): number {
@@ -95,7 +125,7 @@ function transformAvanzaNumberToNumber(s: string): number {
   return Number(s);
 }
 
-function avanaTypeToGhostfolioType(type: TypeOfTransaction): GhostfolioType {
+function avanzaTypeToGhostfolioType(type: TypeOfTransaction): GhostfolioType {
   switch (type) {
     case "Köp":
       return "BUY";
