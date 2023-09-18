@@ -4,3 +4,4 @@ transformed-data.json
 *.csv
 src/account-mapping.json
 src/isin-symbol-mapping.json
+src/data-source-mapping.json

@@ -9,6 +9,18 @@ const accountMapping = JSON.parse(
 const isinMapping = JSON.parse(
   fs.readFileSync(process.cwd() + "/src/isin-symbol-mapping.json").toString()
 );
+const dataSourceMappingFile = JSON.parse(
+  fs.readFileSync(process.cwd() + "/src/data-source-mapping.json").toString()
+);
+
+const dataToSource = new Map<string, string>();
+
+for (const [key, value] of Object.entries(dataSourceMappingFile)) {
+  const values: string[] = value as string[];
+  values.forEach((e: string) => {
+    dataToSource.set(e, key);
+  });
+}
 interface AvanzaDataItem {
   date: string;
   account: string;
@@ -106,11 +118,15 @@ function transformItem(item: AvanzaDataItem): GhostfolioItem {
       Math.abs(transformAvanzaNumberToNumber(item.cost)) /
       Math.abs(transformAvanzaNumberToNumber(item.amount)), // Even if it is sale it should be positive
     accountId: accountMapping[item.account],
-    dataSource: source,
+    dataSource: getSource(item),
     type: avanzaTypeToGhostfolioType(item.typeOfTransaction),
   };
   if (obj.date === "2023-04-24") console.log(item, obj);
   return obj;
+}
+
+function getSource(item: AvanzaDataItem) {
+  return dataToSource.get(item.ISIN) || "YAHOO";
 }
 
 function getSymbol(item: AvanzaDataItem) {
